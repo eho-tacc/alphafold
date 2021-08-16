@@ -24,10 +24,18 @@ from alphafold.data.tools import hhblits
 from alphafold.data.tools import hhsearch
 from alphafold.data.tools import jackhmmer
 import numpy as np
+import pickle
 
 # Internal import (7716).
 
 FeatureDict = Mapping[str, np.ndarray]
+
+
+def to_pckl(d: dict, stub: str):
+  fp = f"./{stub}.pckl"
+  with open(fp, 'wb') as f:
+    pickle.dump(d, f)
+  print(f"pickled dictionary to {fp}")
 
 
 def make_sequence_features(
@@ -130,14 +138,38 @@ class DataPipeline:
     input_description = input_descs[0]
     num_res = len(input_sequence)
 
+    # --------------------------- jackhmmer uniref90 ---------------------------
+
     jackhmmer_uniref90_result = self.jackhmmer_uniref90_runner.query(
         input_fasta_path)[0]
+
+    # DEBUG
+    to_pckl(jackhmmer_uniref90_result, 'jackhmmer_uniref90_result')
+
+    # --------------------------- jackhmmer mgnify -----------------------------
+
     jackhmmer_mgnify_result = self.jackhmmer_mgnify_runner.query(
         input_fasta_path)[0]
 
+    # DEBUG
+    to_pckl(jackhmmer_mgnify_result, 'jackhmmer_mgnify_result')
+
+    # --------------------------- uniref90 to a3m ------------------------------
+
     uniref90_msa_as_a3m = parsers.convert_stockholm_to_a3m(
         jackhmmer_uniref90_result['sto'], max_sequences=self.uniref_max_hits)
+
+    # DEBUG
+    to_pckl(uniref90_msa_as_a3m, 'uniref90_msa_as_a3m')
+
+    # --------------------------- hhsearch -------------------------------------
+
     hhsearch_result = self.hhsearch_pdb70_runner.query(uniref90_msa_as_a3m)
+
+    # DEBUG
+    to_pckl(hhsearch_result, 'hhsearch_result')
+
+    # --------------------------- Write/parse/log outputs ----------------------
 
     uniref90_out_path = os.path.join(msa_output_dir, 'uniref90_hits.sto')
     with open(uniref90_out_path, 'w') as f:
@@ -159,9 +191,14 @@ class DataPipeline:
     mgnify_msa = mgnify_msa[:self.mgnify_max_hits]
     mgnify_deletion_matrix = mgnify_deletion_matrix[:self.mgnify_max_hits]
 
+    # --------------------------- hhblits query --------------------------------
+
     if self._use_small_bfd:
       jackhmmer_small_bfd_result = self.jackhmmer_small_bfd_runner.query(
           input_fasta_path)[0]
+      
+      # DEBUG
+      to_pckl(jackhmmer_small_bfd_result, 'jackhmmer_small_bfd_result')
 
       bfd_out_path = os.path.join(msa_output_dir, 'small_bfd_hits.a3m')
       with open(bfd_out_path, 'w') as f:
@@ -173,6 +210,9 @@ class DataPipeline:
       hhblits_bfd_uniclust_result = self.hhblits_bfd_uniclust_runner.query(
           input_fasta_path)
 
+      # DEBUG
+      to_pckl(hhblits_bfd_uniclust_result, 'hhblits_bfd_uniclust_result')
+
       bfd_out_path = os.path.join(msa_output_dir, 'bfd_uniclust_hits.a3m')
       with open(bfd_out_path, 'w') as f:
         f.write(hhblits_bfd_uniclust_result['a3m'])
@@ -180,22 +220,32 @@ class DataPipeline:
       bfd_msa, bfd_deletion_matrix = parsers.parse_a3m(
           hhblits_bfd_uniclust_result['a3m'])
 
+    # DEBUG
+    to_pckl(hhsearch_hits, 'hhsearch_hits')
+
     templates_result = self.template_featurizer.get_templates(
         query_sequence=input_sequence,
         query_pdb_code=None,
         query_release_date=None,
         hits=hhsearch_hits)
 
+    # DEBUG
+    to_pckl(templates_result, 'templates_result')
+
     sequence_features = make_sequence_features(
         sequence=input_sequence,
         description=input_description,
         num_res=num_res)
 
-    msa_features = make_msa_features(
-        msas=(uniref90_msa, bfd_msa, mgnify_msa),
-        deletion_matrices=(uniref90_deletion_matrix,
+    # DEBUG
+    to_pckl(sequence_features, 'sequence_features')
+
+    make_msa_features_kw = dict(
+      msas=(uniref90_msa, bfd_msa, mgnify_msa),
+      deletion_matrices=(uniref90_deletion_matrix,
                            bfd_deletion_matrix,
                            mgnify_deletion_matrix))
+    msa_features = make_msa_features(make_msa_features_kw)
 
     logging.info('Uniref90 MSA size: %d sequences.', len(uniref90_msa))
     logging.info('BFD MSA size: %d sequences.', len(bfd_msa))
@@ -206,4 +256,10 @@ class DataPipeline:
                  'templates and is later filtered to top 4): %d.',
                  templates_result.features['template_domain_names'].shape[0])
 
-    return {**sequence_features, **msa_features, **templates_result.features}
+    return_dict = {**sequence_features, **msa_features, **templates_result.features}
+
+    # DEBUG
+    to_pckl(return_dict, 'return_dict')
+
+    return return_dict
+
