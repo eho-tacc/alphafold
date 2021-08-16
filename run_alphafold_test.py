@@ -76,10 +76,12 @@ class RunAlphafoldTest(parameterized.TestCase):
     self.assertIn('test', base_output_files)
 
     target_output_files = os.listdir(os.path.join(out_dir, 'test'))
-    self.assertSequenceEqual(
-        ['features.pkl', 'msas', 'ranked_0.pdb', 'ranking_debug.json',
+    expected_out = ['features.pkl', 'msas', 'ranked_0.pdb', 'ranking_debug.json',
          'relaxed_model1.pdb', 'result_model1.pkl', 'timings.json',
-         'unrelaxed_model1.pdb'], target_output_files)
+         'unrelaxed_model1.pdb']
+    # self.assertSequenceEqual(expected_out, target_output_files)
+    assert set(expected_out) == set(target_output_files)
+
 
     # Check that pLDDT is set in the B-factor column.
     with open(os.path.join(out_dir, 'test', 'unrelaxed_model1.pdb')) as f:
