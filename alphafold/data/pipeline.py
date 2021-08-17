@@ -29,10 +29,14 @@ import pickle
 # Internal import (7716).
 
 FeatureDict = Mapping[str, np.ndarray]
+PCKL_DIR = 'pckl'
 
 
-def to_pckl(d: dict, stub: str):
-  fp = f"./{stub}.pckl"
+def to_pckl(d: dict, stub: str, pckl_dir=None):
+  if pckl_dir is None:
+    pckl_dir = PCKL_DIR
+  assert os.path.isdir(pckl_dir)
+  fp = os.path.join(pckl_dir, f"{stub}.pckl")
   with open(fp, 'wb') as f:
     pickle.dump(d, f)
   print(f"pickled dictionary to {fp}")
