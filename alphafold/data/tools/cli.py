@@ -77,7 +77,7 @@ def cache_to_pckl(cache_dir='.cache', exclude_kw=None):
 
     def decorator(fn):
         def wrapped(*args, **kwargs):
-            key = hash(cache_key(set(args), OrderedDict({k: kwargs[k] for k in kwargs if k not in exclude_kw})))
+            key = hash(cache_key(args, OrderedDict({k: kwargs[k] for k in kwargs if k not in exclude_kw})))
             cache_fp = os.path.join(cache_dir, fn.__name__, f"{key}.pckl")
             SKIP_PCKL_CACHE = os.environ.get('SKIP_PCKL_CACHE', 0)
             logging.debug(f"using cache_fp={cache_fp}")
