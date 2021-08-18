@@ -116,15 +116,22 @@ def jackhmmer_uniref90(input_fasta_path: str, jackhmmer_binary_path: str,
 
 @cache_to_pckl(exclude_kw='output_dir')
 def jackhmmer_mgnify(input_fasta_path: str, jackhmmer_binary_path: str,
-                     mgnify_database_path: str, output_dir: str):
+                     mgnify_database_path: str, mgnify_max_hits, 
+                     output_dir: str):
   jackhmmer_mgnify_runner = jackhmmer.Jackhmmer(
       binary_path=jackhmmer_binary_path,
       database_path=mgnify_database_path)
   result = jackhmmer_mgnify_runner.query(input_fasta_path)[0]['sto']
   write_output(result, 'mgnify_hits.sto', output_dir=output_dir)
-  return result
+
+  mgnify_msa, mgnify_deletion_matrix, _ = parsers.parse_stockholm(result)
+  mgnify_msa = mgnify_msa[:mgnify_max_hits]
+  mgnify_deletion_matrix = mgnify_deletion_matrix[:mgnify_max_hits]
+
+  return (mgnify_msa, mgnify_deletion_matrix)
 
 
+@cache_to_pckl(exclude_kw='output_dir')
 def hhsearch_pdb70(jackhmmer_uniref90_result_path, hhsearch_binary_path: str,
                    pdb70_database_path: str, output_dir: str,
                    uniref_max_hits):
@@ -137,7 +144,8 @@ def hhsearch_pdb70(jackhmmer_uniref90_result_path, hhsearch_binary_path: str,
       jackhmmer_uniref90_result, max_sequences=uniref_max_hits)
   result = hhsearch_pdb70_runner.query(uniref90_msa_as_a3m)
   write_output(result, 'pdb70_hits.hhr', output_dir=output_dir)
-  return parsers.parse_hhr(result)
+  parsed = parsers.parse_hhr(result) 
+  return write_output(parsed, 'pdb70_hits_parsed.txt', output_dir=output_dir)
 
 
 @cache_to_pckl(exclude_kw='output_dir')
@@ -163,10 +171,13 @@ def hhblits(input_fasta_path: str, hhblits_binary_path: str,
   return result
 
 
-def template_featurize(input_fasta_path, hhsearch_hits, mmcif_dir: str,
+@cache_to_pckl(exclude_kw='output_dir')
+def template_featurize(input_fasta_path, hhsearch_hits_path, mmcif_dir: str,
                        max_template_date, max_hits, kalign_binary_path,
                        release_dates_path, obsolete_pdbs_path,
                        strict_error_check):
+  with open(hhsearch_hits_path, 'r') as f:
+    hhsearch_hits = f.read()
   template_featurizer = templates.TemplateHitFeaturizer(
     mmcif_dir=mmcif_dir,
     max_template_date=max_template_date,

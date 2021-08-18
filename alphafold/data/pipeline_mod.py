@@ -91,6 +91,7 @@ class ModularDataPipeline:
       input_fasta_path=input_fasta_path, 
       jackhmmer_binary_path=self.jackhmmer_binary_path, 
       mgnify_database_path=self.mgnify_database_path, 
+      mgnify_max_hits=self.mgnify_max_hits,
       output_dir=self.msa_output_dir
     )
   
@@ -120,10 +121,10 @@ class ModularDataPipeline:
       output_dir=self.msa_output_dir
     )
 
-  def template_featurize(self, input_fasta_path, hhsearch_hits):
+  def template_featurize(self, input_fasta_path, hhsearch_hits_path):
     return hhblits(
       input_fasta_path=input_fasta_path, 
-      hhsearch_hits=hhsearch_hits,
+      hhsearch_hits_path=hhsearch_hits_path,
       mmcif_dir=self.mmcif_dir,
       max_template_date=self.max_template_date, 
       max_hits=self.max_hits, 
@@ -144,15 +145,11 @@ class ModularDataPipeline:
         num_res=len(input_sequence))
 
     jackhmmer_uniref90_result_path = self.jackhmmer_uniref90(input_fasta_path)
-    jackhmmer_mgnify_result = self.jackhmmer_mgnify(input_fasta_path)
-    hhsearch_hits = self.hhsearch_pdb70(jackhmmer_uniref90_result_path)
+    mgnify_msa, mgnify_deletion_matrix = self.jackhmmer_mgnify(input_fasta_path)
+    hhsearch_hits_path = self.hhsearch_pdb70(jackhmmer_uniref90_result_path)
 
-    uniref90_msa, uniref90_deletion_matrix, _ = parsers.parse_stockholm(
-        jackhmmer_uniref90_result)
-    mgnify_msa, mgnify_deletion_matrix, _ = parsers.parse_stockholm(
-        jackhmmer_mgnify_result)
-    mgnify_msa = mgnify_msa[:self.mgnify_max_hits]
-    mgnify_deletion_matrix = mgnify_deletion_matrix[:self.mgnify_max_hits]
+    with open(jackhmmer_uniref90_result_path, 'r') as f:
+      uniref90_msa, uniref90_deletion_matrix, _ = parsers.parse_stockholm(f.read())
 
     if self.use_small_bfd:
       jackhmmer_small_bfd_result = self.jackhmmer_small_bfd(input_fasta_path)
@@ -163,7 +160,7 @@ class ModularDataPipeline:
       bfd_msa, bfd_deletion_matrix = parsers.parse_a3m(
           hhblits_bfd_uniclust_result)
 
-    templates_result = self.template_featurize(input_sequence, hhsearch_hits)
+    templates_result = self.template_featurize(input_sequence, hhsearch_hits_path)
 
     msa_features = make_msa_features(
         msas=(uniref90_msa, bfd_msa, mgnify_msa),
