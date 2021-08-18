@@ -4,12 +4,9 @@ import os
 from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence
 from absl import logging
-from alphafold.common import residue_constants
 from alphafold.data import parsers
 from alphafold.data import templates
-from alphafold.data.tools import hhblits
-from alphafold.data.tools import hhsearch
-from alphafold.data.tools import jackhmmer
+from alphafold.data.tools.cli import *
 from alphafold.data.pipeline import make_sequence_features, make_msa_features
 import numpy as np
 
@@ -65,10 +62,11 @@ class ModularDataPipeline:
   def out_path(self, fname):
       return os.path.join(self.msa_output_dir, fname)
     
-  def write(self, data, fname):
+  def write(self, data, fname) -> str:
     fp = self.out_path(fname)
     with open(fp, 'w') as f:
       f.write(data)
+    return fp
 
   def load_input_fasta(self, input_fasta_path):
     with open(input_fasta_path) as f:
@@ -86,58 +84,55 @@ class ModularDataPipeline:
         binary_path=self.jackhmmer_binary_path,
         database_path=self.uniref90_database_path)
     result = jackhmmer_uniref90_runner.query(input_fasta_path)[0]['sto']
-    self.write(result, 'uniref90_hits.sto')
-    return result
+    return self.write(result, 'uniref90_hits.sto')
 
   def jackhmmer_mgnify(self, input_fasta_path: str):
-    jackhmmer_mgnify_runner = jackhmmer.Jackhmmer(
-        binary_path=self.jackhmmer_binary_path,
-        database_path=self.mgnify_database_path)
-    result = jackhmmer_mgnify_runner.query(input_fasta_path)[0]['sto']
-    self.write(result, 'mgnify_hits.sto')
-    return result
+    return jackhmmer_mgnify(
+      input_fasta_path=input_fasta_path, 
+      jackhmmer_binary_path=self.jackhmmer_binary_path, 
+      mgnify_database_path=self.mgnify_database_path, 
+      output_dir=self.msa_output_dir
+    )
   
-  def hhsearch_pdb70(self, jackhmmer_uniref90_result):
-    hhsearch_pdb70_runner = hhsearch.HHSearch(
-        binary_path=self.hhsearch_binary_path,
-        databases=[self.pdb70_database_path])
-    uniref90_msa_as_a3m = parsers.convert_stockholm_to_a3m(
-        jackhmmer_uniref90_sto, max_sequences=self.uniref_max_hits)
-    result = hhsearch_pdb70_runner.query(uniref90_msa_as_a3m)
-    self.write(result, 'pdb70_hits.hhr')
-    return parsers.parse_hhr(result)
+  def hhsearch_pdb70(self, jackhmmer_uniref90_result_path):
+    return hhsearch_pdb70(
+      jackhmmer_uniref90_result_path=jackhmmer_uniref90_result_path, 
+      hhsearch_binary_path=self.hhsearch_binary_path,
+      pdb70_database_path=self.pdb70_database_path, 
+      uniref_max_hits=self.uniref_max_hits,
+      output_dir=self.msa_output_dir
+    )
   
   def jackhmmer_small_bfd(self, input_fasta_path):
-    jackhmmer_small_bfd_runner = jackhmmer.Jackhmmer(
-        binary_path=self.jackhmmer_binary_path,
-        database_path=self.small_bfd_database_path)
-    result = jackhmmer_small_bfd_runner.query(input_fasta_path)[0]['sto']
-    self.write(result, 'small_bfd_hits.a3m')
-    return result
+    return jackhmmer_small_bfd(
+      input_fasta_path=input_fasta_path, 
+      jackhmmer_binary_path=self.jackhmmer_binary_path, 
+      small_bfd_database_path=self.small_bfd_database_path,
+      output_dir=self.msa_output_dir
+    )
 
   def hhblits(self, input_fasta_path):
-    hhblits_bfd_uniclust_runner = hhblits.HHBlits(
-        binary_path=self.hhblits_binary_path,
-        databases=[self.bfd_database_path, self.uniclust30_database_path])
-    result = hhblits_bfd_uniclust_runner.query(input_fasta_path)['a3m']
-    self.write(result, 'bfd_uniclust_hits.a3m')
-    return result
+    return hhblits(
+      input_fasta_path=input_fasta_path, 
+      hhblits_binary_path=self.hhblits_binary_path,
+      bfd_database_path=self.bfd_database_path,
+      uniclust30_database_path=self.uniclust30_database_path,
+      output_dir=self.msa_output_dir
+    )
 
   def template_featurize(self, input_fasta_path, hhsearch_hits):
-    template_featurizer = templates.TemplateHitFeaturizer(
+    return hhblits(
+      input_fasta_path=input_fasta_path, 
+      hhsearch_hits=hhsearch_hits,
       mmcif_dir=self.mmcif_dir,
-      max_template_date=self.max_template_date,
-      max_hits=self.max_hits,
+      max_template_date=self.max_template_date, 
+      max_hits=self.max_hits, 
       kalign_binary_path=self.kalign_binary_path,
-      release_dates_path=self.release_dates_path,
+      release_dates_path=self.release_dates_path, 
       obsolete_pdbs_path=self.obsolete_pdbs_path,
       strict_error_check=self.strict_error_check,
+      output_dir=self.msa_output_dir
     )
-    return template_featurizer.get_templates(
-        query_sequence=input_sequence,
-        query_pdb_code=None,
-        query_release_date=None,
-        hits=hhsearch_hits)
 
   def process(self, input_fasta_path: str, msa_output_dir: str) -> FeatureDict:
     """Runs alignment tools on the input sequence and creates features."""
@@ -148,9 +143,9 @@ class ModularDataPipeline:
         description=input_description,
         num_res=len(input_sequence))
 
-    jackhmmer_uniref90_result = self.jackhmmer_uniref90(input_fasta_path)
+    jackhmmer_uniref90_result_path = self.jackhmmer_uniref90(input_fasta_path)
     jackhmmer_mgnify_result = self.jackhmmer_mgnify(input_fasta_path)
-    hhsearch_hits = self.hhsearch_pdb70(jackhmmer_uniref90_result)
+    hhsearch_hits = self.hhsearch_pdb70(jackhmmer_uniref90_result_path)
 
     uniref90_msa, uniref90_deletion_matrix, _ = parsers.parse_stockholm(
         jackhmmer_uniref90_result)
