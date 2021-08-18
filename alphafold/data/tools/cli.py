@@ -1,5 +1,6 @@
 # -------------------- Functional interface for Click CLI ----------------------
 import os
+import click
 from collections import OrderedDict
 import pickle
 from functools import lru_cache
@@ -10,6 +11,14 @@ from alphafold.data.tools import hhsearch
 from alphafold.data.tools import jackhmmer
 from alphafold.data import parsers
 from alphafold.data import templates
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+
+@click.group()
+def cli():
+    pass
 
 
 def write_output(data, fname, output_dir) -> str:
@@ -54,6 +63,13 @@ def cache_key(args, kwargs):
 
 
 def cache_to_pckl(cache_dir='.cache', exclude_kw=None):
+    """Caches function results to pickle file. Returns a decorator factory.
+    Pickled function results are cached to a path `cache_dir/func.__name__/hash`
+    where hash is hashed args and kwargs (except kwargs listed in `exclude_kw`).
+    If the cache file exists, return the unpickled result. If it does not exist,
+    or if environment variable `SKIP_PCKL_CACHE=1`, run the function and write
+    its result to the cache.
+    """
     if exclude_kw is None:
         exclude_kw = list()
     elif isinstance(exclude_kw, str):
@@ -63,11 +79,11 @@ def cache_to_pckl(cache_dir='.cache', exclude_kw=None):
         def wrapped(*args, **kwargs):
             key = hash(cache_key(set(args), OrderedDict({k: kwargs[k] for k in kwargs if k not in exclude_kw})))
             cache_fp = os.path.join(cache_dir, fn.__name__, f"{key}.pckl")
-            print(f"using cache_fp={cache_fp}")
             SKIP_PCKL_CACHE = os.environ.get('SKIP_PCKL_CACHE', 0)
-            print(f"SKIP_PCKL_CACHE={SKIP_PCKL_CACHE}")
+            logging.debug(f"using cache_fp={cache_fp}")
+            logging.debug(f"SKIP_PCKL_CACHE={SKIP_PCKL_CACHE}")
             if os.path.exists(cache_fp) and not SKIP_PCKL_CACHE:
-                print(f"using cache at {cache_fp}")
+                logging.info(f"using cache at {cache_fp} instead of running {fn.__name__}")
                 with open(cache_fp, 'rb') as f:
                     return pickle.load(f)
 
@@ -76,7 +92,7 @@ def cache_to_pckl(cache_dir='.cache', exclude_kw=None):
             # write to cache file
             os.makedirs(os.path.dirname(cache_fp), exist_ok=True)
             with open(cache_fp, 'wb') as f:
-                print(f"saving pickled results to {cache_fp}")
+                logging.info(f"saving pickled results to {cache_fp}")
                 pickle.dump(result, f)
 
             return result
@@ -165,3 +181,7 @@ def template_featurize(input_fasta_path, hhsearch_hits, mmcif_dir: str,
       query_pdb_code=None,
       query_release_date=None,
       hits=hhsearch_hits)
+
+
+if __name__ == '__main__':
+    cli()
