@@ -27,7 +27,7 @@ from absl import flags
 from absl import logging
 from alphafold.common import protein
 from alphafold.common import residue_constants
-from alphafold.data import pipeline
+from alphafold.data import pipeline, pipeline_mod
 from alphafold.data import templates
 from alphafold.model import data
 from alphafold.model import config
@@ -234,15 +234,7 @@ def main(argv):
   if len(fasta_names) != len(set(fasta_names)):
     raise ValueError('All FASTA paths must have a unique basename.')
 
-  template_featurizer = templates.TemplateHitFeaturizer(
-      mmcif_dir=FLAGS.template_mmcif_dir,
-      max_template_date=FLAGS.max_template_date,
-      max_hits=MAX_TEMPLATE_HITS,
-      kalign_binary_path=FLAGS.kalign_binary_path,
-      release_dates_path=None,
-      obsolete_pdbs_path=FLAGS.obsolete_pdbs_path)
-
-  data_pipeline = pipeline.DataPipeline(
+  data_pipeline = pipeline_mod.ModularDataPipeline(
       jackhmmer_binary_path=FLAGS.jackhmmer_binary_path,
       hhblits_binary_path=FLAGS.hhblits_binary_path,
       hhsearch_binary_path=FLAGS.hhsearch_binary_path,
@@ -252,8 +244,16 @@ def main(argv):
       uniclust30_database_path=FLAGS.uniclust30_database_path,
       small_bfd_database_path=FLAGS.small_bfd_database_path,
       pdb70_database_path=FLAGS.pdb70_database_path,
-      template_featurizer=template_featurizer,
-      use_small_bfd=use_small_bfd)
+      use_small_bfd=use_small_bfd,
+
+      # for construction of TemplateHitFeaturizer, replacing
+      # template_featurizer=template_featurizer,
+      mmcif_dir=FLAGS.template_mmcif_dir,
+      max_template_date=FLAGS.max_template_date,
+      max_hits=MAX_TEMPLATE_HITS,
+      kalign_binary_path=FLAGS.kalign_binary_path,
+      release_dates_path=None,
+      obsolete_pdbs_path=FLAGS.obsolete_pdbs_path)
 
   model_runners = {}
   for model_name in FLAGS.model_names:
