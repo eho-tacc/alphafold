@@ -114,6 +114,12 @@ def jackhmmer_uniref90(input_fasta_path: str, jackhmmer_binary_path: str,
   return result
 
 
+@cli.command(name='jackhmmer_mgnify')
+@click.argument('input_fasta_path', type=click.Path())
+@click.argument('jackhmmer_binary_path', type=click.Path())
+@click.argument('mgnify_database_path', type=click.Path())
+@click.argument('mgnify_max_hits', type=click.INT)
+@click.argument('output_dir', type=click.Path(file_okay=False))
 @cache_to_pckl(exclude_kw='output_dir')
 def jackhmmer_mgnify(input_fasta_path: str, jackhmmer_binary_path: str,
                      mgnify_database_path: str, mgnify_max_hits, 
