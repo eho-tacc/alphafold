@@ -249,7 +249,7 @@ class DataPipeline:
       deletion_matrices=(uniref90_deletion_matrix,
                            bfd_deletion_matrix,
                            mgnify_deletion_matrix))
-    msa_features = make_msa_features(make_msa_features_kw)
+    msa_features = make_msa_features(**make_msa_features_kw)
 
     logging.info('Uniref90 MSA size: %d sequences.', len(uniref90_msa))
     logging.info('BFD MSA size: %d sequences.', len(bfd_msa))
