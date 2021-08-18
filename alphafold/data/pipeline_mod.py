@@ -26,14 +26,9 @@ class ModularDataPipeline:
   hhsearch_binary_path: str
   uniref90_database_path: str
   mgnify_database_path: str
-  bfd_database_path: str = None
-  uniclust30_database_path: str = None
-  small_bfd_database_path: str = None
   pdb70_database_path: str
   use_small_bfd: bool
-  mgnify_max_hits: int = 501
-  uniref_max_hits: int = 10000
-  
+
   # for construction of TemplateHitFeaturizer, replacing
   # template_featurizer: templates.TemplateHitFeaturizer
   mmcif_dir: str
@@ -43,6 +38,12 @@ class ModularDataPipeline:
   release_dates_path: str = None
   obsolete_pdbs_path: str = None
   strict_error_check: bool = False
+
+  mgnify_max_hits: int = 501
+  uniref_max_hits: int = 10000
+  bfd_database_path: str = None
+  uniclust30_database_path: str = None
+  small_bfd_database_path: str = None
 
   def init_runners(self,
                jackhmmer_binary_path: str,
@@ -59,8 +60,7 @@ class ModularDataPipeline:
                mgnify_max_hits: int = 501,
                uniref_max_hits: int = 10000):
     """Deprecated"""
-    if use_small_bfd:
-    else:
+    pass
   
   def out_path(self, fname):
       return os.path.join(self.msa_output_dir, fname)
@@ -71,7 +71,6 @@ class ModularDataPipeline:
       f.write(data)
 
   def load_input_fasta(self, input_fasta_path):
-      """description"""
     with open(input_fasta_path) as f:
       input_fasta_str = f.read()
     input_seqs, input_descs = parsers.parse_fasta(input_fasta_str)
@@ -98,7 +97,7 @@ class ModularDataPipeline:
     self.write(result, 'mgnify_hits.sto')
     return result
   
-  def hhsearch_pdb70(self, jackhmmer_uniref90_result)
+  def hhsearch_pdb70(self, jackhmmer_uniref90_result):
     hhsearch_pdb70_runner = hhsearch.HHSearch(
         binary_path=self.hhsearch_binary_path,
         databases=[self.pdb70_database_path])
@@ -108,7 +107,7 @@ class ModularDataPipeline:
     self.write(result, 'pdb70_hits.hhr')
     return parsers.parse_hhr(result)
   
-  def jackhmmer_small_bfd(self, input_fasta_path)
+  def jackhmmer_small_bfd(self, input_fasta_path):
     jackhmmer_small_bfd_runner = jackhmmer.Jackhmmer(
         binary_path=self.jackhmmer_binary_path,
         database_path=self.small_bfd_database_path)
@@ -116,7 +115,7 @@ class ModularDataPipeline:
     self.write(result, 'small_bfd_hits.a3m')
     return result
 
-  def hhblits(self, input_fasta_path)
+  def hhblits(self, input_fasta_path):
     hhblits_bfd_uniclust_runner = hhblits.HHBlits(
         binary_path=self.hhblits_binary_path,
         databases=[self.bfd_database_path, self.uniclust30_database_path])
@@ -124,7 +123,7 @@ class ModularDataPipeline:
     self.write(result, 'bfd_uniclust_hits.a3m')
     return result
 
-  def template_featurize(self, input_fasta_path, hhsearch_hits)
+  def template_featurize(self, input_fasta_path, hhsearch_hits):
     template_featurizer = templates.TemplateHitFeaturizer(
       mmcif_dir=self.mmcif_dir,
       max_template_date=self.max_template_date,
