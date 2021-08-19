@@ -1,5 +1,6 @@
 # -------------------- Functional interface for Click CLI ----------------------
 import os
+import json
 import click
 from collections import OrderedDict
 import pickle
@@ -11,14 +12,24 @@ from alphafold.data.tools import hhsearch
 from alphafold.data.tools import jackhmmer
 from alphafold.data import parsers
 from alphafold.data import templates
-
 import logging
-logging.basicConfig(level=logging.DEBUG)
+
+DEFAULT_CACHE_DIR = '.cache'
 
 
 @click.group()
 def cli():
     pass
+
+
+def parse_fasta(input_fasta_path):
+  """Given fasta file at `input_fasta_path`, calls `parsers.parse_fasta`
+  returning tuple of input sequence, input description, and sequence length.
+  """
+  with open(input_fasta_path) as f:
+      input_fasta_str = f.read()
+  input_seqs, input_descs = parsers.parse_fasta(input_fasta_str)
+  return (input_seqs[0], input_descs[0], len(input_sequence))
 
 
 def write_output(data, fname, output_dir) -> str:
@@ -35,13 +46,7 @@ def hash_fp(fp):
 
 
 def md5_hash(s: str) -> str:
-    hasher = hashlib.md5()
-    hasher.update(s)
-    return hasher.hexdigest()
-
-
-def same_hash(s1: str, s2: str) -> bool:
-    return md5_hash(s1) == md5_has(s2)
+    return hashlib.md5(s).hexdigest()
 
 
 def cache_key_with_hashed_paths(args, kwargs):
@@ -59,10 +64,12 @@ def cache_key_with_hashed_paths(args, kwargs):
 
 
 def cache_key(args, kwargs):
-    return (args, frozenset(kwargs.items()))
+    obj = (args, OrderedDict(kwargs.items()))
+    serialized = json.dumps(obj).encode('utf-8')
+    return md5_hash(serialized)
+    
 
-
-def cache_to_pckl(cache_dir='.cache', exclude_kw=None):
+def cache_to_pckl(cache_dir=DEFAULT_CACHE_DIR, exclude_kw=None, use_pckl=True):
     """Caches function results to pickle file. Returns a decorator factory.
     Pickled function results are cached to a path `cache_dir/func.__name__/hash`
     where hash is hashed args and kwargs (except kwargs listed in `exclude_kw`).
@@ -74,26 +81,40 @@ def cache_to_pckl(cache_dir='.cache', exclude_kw=None):
         exclude_kw = list()
     elif isinstance(exclude_kw, str):
         exclude_kw = [exclude_kw]
+    
+    # whether to use pickle or plain text cache
+    cache_ext = 'pckl' if use_pckl is True else 'out'
+    SKIP_PCKL_CACHE = os.environ.get('SKIP_PCKL_CACHE', 0)
 
     def decorator(fn):
         def wrapped(*args, **kwargs):
-            key = hash(cache_key(args, OrderedDict({k: kwargs[k] for k in kwargs if k not in exclude_kw})))
-            cache_fp = os.path.join(cache_dir, fn.__name__, f"{key}.pckl")
-            SKIP_PCKL_CACHE = os.environ.get('SKIP_PCKL_CACHE', 0)
-            logging.debug(f"using cache_fp={cache_fp}")
-            logging.debug(f"SKIP_PCKL_CACHE={SKIP_PCKL_CACHE}")
+            kw = {k: kwargs[k] for k in kwargs if k not in exclude_kw}
+            key = cache_key(args, kw)
+            cache_fp = os.path.join(cache_dir, fn.__name__, f"{key}.{cache_ext}")
+
+            logging.info(f"using cache_fp={cache_fp}")
+            logging.info(f"SKIP_PCKL_CACHE={SKIP_PCKL_CACHE}")
+
             if os.path.exists(cache_fp) and not SKIP_PCKL_CACHE:
                 logging.info(f"using cache at {cache_fp} instead of running {fn.__name__}")
-                with open(cache_fp, 'rb') as f:
-                    return pickle.load(f)
+                if use_pckl:
+                    with open(cache_fp, 'rb') as f:
+                        return pickle.load(f)
+                else:
+                    with open(cache_fp, 'r') as f:
+                        return f.read()
 
             result = fn(*args, **kwargs)
 
             # write to cache file
             os.makedirs(os.path.dirname(cache_fp), exist_ok=True)
-            with open(cache_fp, 'wb') as f:
-                logging.info(f"saving pickled results to {cache_fp}")
-                pickle.dump(result, f)
+            logging.info(f"saving results to {cache_fp}")
+            if use_pckl:
+                with open(cache_fp, 'wb') as f:
+                    pickle.dump(result, f)
+            else:
+                with open(cache_fp, 'w') as f:
+                    f.write(result)
 
             return result
 
@@ -103,6 +124,15 @@ def cache_to_pckl(cache_dir='.cache', exclude_kw=None):
 
 # ------------------------------------------------------------------------------
 
+@cli.command(name='jackhmmer_uniref90')
+@click.option('--input-fasta-path', required=True, type=click.Path())
+@click.option('--jackhmmer-binary-path', required=True, type=click.Path())
+@click.option('--uniref90-database-path', required=True, type=click.Path())
+@click.option('--output-dir', required=True, type=click.Path(file_okay=False))
+def jackhmmer_uniref90_cli(*args, **kwargs):
+    return jackhmmer_uniref90(*args, **kwargs)
+
+
 @cache_to_pckl(exclude_kw='output_dir')
 def jackhmmer_uniref90(input_fasta_path: str, jackhmmer_binary_path: str,
                        uniref90_database_path: str, output_dir: str):
@@ -110,16 +140,19 @@ def jackhmmer_uniref90(input_fasta_path: str, jackhmmer_binary_path: str,
       binary_path=jackhmmer_binary_path,
       database_path=uniref90_database_path)
   result = jackhmmer_uniref90_runner.query(input_fasta_path)[0]['sto']
-  write_output(result, 'uniref90_hits.sto', output_dir=output_dir)
-  return result
+  return write_output(result, 'uniref90_hits.sto', output_dir=output_dir)
 
 
 @cli.command(name='jackhmmer_mgnify')
-@click.argument('input_fasta_path', type=click.Path())
-@click.argument('jackhmmer_binary_path', type=click.Path())
-@click.argument('mgnify_database_path', type=click.Path())
-@click.argument('mgnify_max_hits', type=click.INT)
-@click.argument('output_dir', type=click.Path(file_okay=False))
+@click.option('--input-fasta-path', required=True, type=click.Path())
+@click.option('--jackhmmer-binary-path', required=True, type=click.Path())
+@click.option('--mgnify-database-path', required=True, type=click.Path())
+@click.option('--mgnify-max-hits', required=True, type=click.INT)
+@click.option('--output-dir', required=True, type=click.Path(file_okay=False))
+def jackhmmer_mgnify_cli(*args, **kwargs):
+    return jackhmmer_mgnify(*args, **kwargs)
+
+
 @cache_to_pckl(exclude_kw='output_dir')
 def jackhmmer_mgnify(input_fasta_path: str, jackhmmer_binary_path: str,
                      mgnify_database_path: str, mgnify_max_hits, 
@@ -149,9 +182,7 @@ def hhsearch_pdb70(jackhmmer_uniref90_result_path, hhsearch_binary_path: str,
   uniref90_msa_as_a3m = parsers.convert_stockholm_to_a3m(
       jackhmmer_uniref90_result, max_sequences=uniref_max_hits)
   result = hhsearch_pdb70_runner.query(uniref90_msa_as_a3m)
-  write_output(result, 'pdb70_hits.hhr', output_dir=output_dir)
-  parsed = parsers.parse_hhr(result) 
-  return write_output(parsed, 'pdb70_hits_parsed.txt', output_dir=output_dir)
+  return write_output(result, 'pdb70_hits.hhr', output_dir=output_dir)
 
 
 @cache_to_pckl(exclude_kw='output_dir')
@@ -177,13 +208,13 @@ def hhblits(input_fasta_path: str, hhblits_binary_path: str,
   return result
 
 
-@cache_to_pckl(exclude_kw='output_dir')
+@cache_to_pckl()
 def template_featurize(input_fasta_path, hhsearch_hits_path, mmcif_dir: str,
                        max_template_date, max_hits, kalign_binary_path,
                        release_dates_path, obsolete_pdbs_path,
                        strict_error_check):
   with open(hhsearch_hits_path, 'r') as f:
-    hhsearch_hits = f.read()
+    hhsearch_hits = parsers.parse_hhr(f.read())
   template_featurizer = templates.TemplateHitFeaturizer(
     mmcif_dir=mmcif_dir,
     max_template_date=max_template_date,

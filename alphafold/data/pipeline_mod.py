@@ -80,10 +80,12 @@ class ModularDataPipeline:
     return (input_sequence, input_description)
 
   def jackhmmer_uniref90(self, input_fasta_path: str):
-    jackhmmer_uniref90_runner = jackhmmer.Jackhmmer(
-        binary_path=self.jackhmmer_binary_path,
-        database_path=self.uniref90_database_path)
-    result = jackhmmer_uniref90_runner.query(input_fasta_path)[0]['sto']
+    return jackhmmer_uniref90(
+      input_fasta_path=input_fasta_path, 
+      jackhmmer_binary_path=self.jackhmmer_binary_path,
+      uniref90_database_path=self.uniref90_database_path,
+      output_dir=self.msa_output_dir
+    )
     return self.write(result, 'uniref90_hits.sto')
 
   def jackhmmer_mgnify(self, input_fasta_path: str):
@@ -122,7 +124,7 @@ class ModularDataPipeline:
     )
 
   def template_featurize(self, input_fasta_path, hhsearch_hits_path):
-    return hhblits(
+    return template_featurize(
       input_fasta_path=input_fasta_path, 
       hhsearch_hits_path=hhsearch_hits_path,
       mmcif_dir=self.mmcif_dir,
@@ -131,8 +133,7 @@ class ModularDataPipeline:
       kalign_binary_path=self.kalign_binary_path,
       release_dates_path=self.release_dates_path, 
       obsolete_pdbs_path=self.obsolete_pdbs_path,
-      strict_error_check=self.strict_error_check,
-      output_dir=self.msa_output_dir
+      strict_error_check=self.strict_error_check
     )
 
   def process(self, input_fasta_path: str, msa_output_dir: str) -> FeatureDict:
