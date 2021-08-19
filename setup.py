@@ -44,7 +44,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'afpipeline = alphafold.data.tools.cli:cli',
+            'af2 = alphafold.data.tools.cli:cli',
         ],
     },
     tests_require=['mock'],
