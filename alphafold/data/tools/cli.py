@@ -65,9 +65,14 @@ def cache_key_with_hashed_paths(args, kwargs):
     return (args, frozenset(kw.items()))
 
 
+def order_dict(d: dict) -> tuple:
+    return tuple(((k, d[k]) for k in sorted(d.keys())))
+
+
 def cache_key(args, kwargs):
-    obj = (args, OrderedDict(kwargs.items()))
+    obj = (args, order_dict(kwargs))
     serialized = json.dumps(obj).encode('utf-8')
+    logging.info(f"using serialized={serialized}")
     return md5_hash(serialized)
     
 
@@ -107,6 +112,8 @@ def cache_to_pckl(cache_dir=None, exclude_kw=None, use_pckl=True):
                 else:
                     with open(cache_fp, 'r') as f:
                         return f.read()
+            else:
+                logging.info(f"no cache found at {cache_fp}")
 
             result = fn(*args, **kwargs)
 
@@ -137,7 +144,7 @@ def jackhmmer_cli(*args, **kwargs):
     return jackhmmer(*args, **kwargs)
 
 
-@cache_to_pckl(exclude_kw=['output_dir'])
+@cache_to_pckl(exclude_kw=['output_dir', 'fname'])
 def jackhmmer(input_fasta_path: str, jackhmmer_binary_path: str,
               database_path: str, fname: str, output_dir: str):
   jackhmmer_uniref90_runner = jackhmmer_wrapper.Jackhmmer(
