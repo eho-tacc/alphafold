@@ -81,7 +81,7 @@ def cache_to_pckl(cache_dir=None, exclude_kw=None, use_pckl=True):
     Pickled function results are cached to a path `cache_dir/func.__name__/hash`
     where hash is hashed args and kwargs (except kwargs listed in `exclude_kw`).
     If the cache file exists, return the unpickled result. If it does not exist,
-    or if environment variable `SKIP_PCKL_CACHE=1`, run the function and write
+    or if environment variable `AF2_SKIP_PCKL_CACHE=1`, run the function and write
     its result to the cache.
     """
     if exclude_kw is None:
@@ -90,11 +90,13 @@ def cache_to_pckl(cache_dir=None, exclude_kw=None, use_pckl=True):
         exclude_kw = [exclude_kw]
     
     if cache_dir is None:
+        cache_dir = os.environ.get(AF2_CACHE_DIR, None)
+    if cache_dir is None:
         cache_dir = DEFAULT_CACHE_DIR
     
     # whether to use pickle or plain text cache
     cache_ext = 'pckl' if use_pckl is True else 'out'
-    SKIP_PCKL_CACHE = os.environ.get('SKIP_PCKL_CACHE', 0)
+    AF2_SKIP_PCKL_CACHE = os.environ.get('AF2_SKIP_PCKL_CACHE', 0)
 
     def decorator(fn):
         def wrapped(*args, **kwargs):
@@ -102,9 +104,9 @@ def cache_to_pckl(cache_dir=None, exclude_kw=None, use_pckl=True):
             key = cache_key(args, kw)
             cache_fp = os.path.join(cache_dir, fn.__name__, f"{key}.{cache_ext}")
 
-            logging.debug(f"using cache_fp={cache_fp} (SKIP_PCKL_CACHE={SKIP_PCKL_CACHE})")
+            logging.debug(f"using cache_fp={cache_fp} (AF2_SKIP_PCKL_CACHE={AF2_SKIP_PCKL_CACHE})")
 
-            if os.path.exists(cache_fp) and not SKIP_PCKL_CACHE:
+            if os.path.exists(cache_fp) and not AF2_SKIP_PCKL_CACHE:
                 logging.info(f"using cache at {cache_fp} instead of running {fn.__name__}")
                 if use_pckl:
                     with open(cache_fp, 'rb') as f:
