@@ -14,6 +14,7 @@ from alphafold.data import parsers, templates, pipeline
 from alphafold.data.tools.cache_utils import cache_to_pckl
 import logging
 
+logging.basicConfig(level=logging.DEBUG)
 
 @click.group()
 def cli():
