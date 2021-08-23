@@ -46,11 +46,13 @@ def normpath(s: str) -> str:
 def cache_key(args, kwargs):
     # convert path-like kwargs to their normal absolute paths
     kw = dict()
-    for k in kwargs:
-        if looks_like_path(k):
-            kw[k] = normpath(kwargs[k])
+    for k, v in kwargs.items():
+        if v is None:
+            kw[k] = v
+        elif looks_like_path(k):
+            kw[k] = normpath(v)
         else:
-            kw[k] = kwargs[k]
+            kw[k] = v
 
     obj = (args, order_dict(kw))
 
